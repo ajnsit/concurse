@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::host::{Host, Node};
 
@@ -94,7 +94,7 @@ impl<'a> VDomMachine<'a> {
   }
 
 
-  pub(crate) fn halt(&self) {
+  pub(crate) fn halt(&mut self) {
     match &mut self.vdom {
       VDom::Text { state: node , .. } => {
         let parent = node.parent_node();
@@ -127,18 +127,22 @@ fn update_attrs(node: &mut Node, attrs_old: &Attrs, attrs_new: &Attrs) {
 }
 
 fn update_children<'a>(host: &Host, parent: &mut Node, children_old: &mut Vec<VDomMachine<'a>>, children_new: &Vec<VDomTree<'a>>) {
-  for(child_old, child_new) in children_old.iter_mut().zip(children_new) {
+
+  children_old.iter_mut().zip(children_new).for_each(|(child_old, child_new)| {
     child_old.step(host, &child_new.vdom);
-  }
+  });
+
   let to_be_removed = children_old.drain(children_new.len()..);
-  for child in to_be_removed {
+  to_be_removed.for_each(|mut child| {
     child.halt();
-  }
-  for child_new in children_new.iter().skip(children_old.len()) {
+  });
+
+  children_new.iter().skip(children_old.len()).for_each(|child_new| {
     let child_vdom = VDomMachine::build_vdom(host, &child_new.vdom);
     let child_node = VDomMachine::get_node(&child_vdom);
     // TODO: Insert at the correct index
-    parent.insert_child_ix(0, child_node); 
+    parent.insert_child_ix(0, child_node);
     children_old.push(VDomMachine { vdom: child_vdom });
-  }
+  });
+
 }
