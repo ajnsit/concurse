@@ -2,32 +2,32 @@ use std::collections::HashMap;
 
 use crate::host::{Host, Node};
 
-type Attrs<'a> = HashMap<&'a str, &'a str>;
+type Attrs = HashMap<String, String>;
 
 #[derive(Debug)]
-pub(crate) enum VDom<'a, Children, State> {
+pub(crate) enum VDom<Children, State> {
     Text {
-        text: &'a str,
+        text: String,
         state: State,
     },
     Elem {
-        name: &'a str,
-        attrs: Attrs<'a>,
+        name: String,
+        attrs: Attrs,
         children: Children,
         state: State,
     },
 }
 
-pub(crate) struct VDomTree<'a> {
-    vdom: VDom<'a, Vec<VDomTree<'a>>, ()>,
+pub(crate) struct VDomTree {
+    vdom: VDom<Vec<VDomTree>, ()>,
 }
 
-pub(crate) struct VDomMachine<'a> {
-    vdom: VDom<'a, Vec<VDomMachine<'a>>, Node>,
+pub(crate) struct VDomMachine {
+    vdom: VDom<Vec<VDomMachine>, Node>,
 }
 
-impl<'a> VDomMachine<'a> {
-    pub(crate) fn get_node(vdom: &'a VDom<'a, Vec<VDomMachine<'a>>, Node>) -> &Node {
+impl VDomMachine {
+    pub(crate) fn get_node(vdom: &VDom<Vec<VDomMachine>, Node>) -> &Node {
         match vdom {
             VDom::Text { state, .. } => state,
             VDom::Elem { state, .. } => state,
@@ -36,12 +36,15 @@ impl<'a> VDomMachine<'a> {
 
     pub(crate) fn build_vdom(
         host: &Host,
-        input: &VDom<'a, Vec<VDomTree<'a>>, ()>,
-    ) -> VDom<'a, Vec<VDomMachine<'a>>, Node> {
+        input: &VDom<Vec<VDomTree>, ()>,
+    ) -> VDom<Vec<VDomMachine>, Node> {
         match input {
             VDom::Text { text, .. } => {
                 let node = host.create_text_node(text);
-                VDom::Text { text, state: node }
+                VDom::Text {
+                    text: text.clone(),
+                    state: node,
+                }
             }
             VDom::Elem {
                 name,
@@ -64,7 +67,7 @@ impl<'a> VDomMachine<'a> {
                     })
                     .collect();
                 VDom::Elem {
-                    name,
+                    name: name.clone(),
                     attrs: attrs.clone(),
                     children,
                     state: node,
@@ -73,20 +76,16 @@ impl<'a> VDomMachine<'a> {
         }
     }
 
-    pub(crate) fn rebuild_dom(&mut self, host: &Host, input: &VDom<'a, Vec<VDomTree<'a>>, ()>) {
+    pub(crate) fn rebuild_dom(&mut self, host: &Host, input: &VDom<Vec<VDomTree>, ()>) {
         self.vdom = Self::build_vdom(host, input);
     }
 
-    pub(crate) fn halt_and_rebuild(
-        &mut self,
-        host: &Host,
-        input: &VDom<'a, Vec<VDomTree<'a>>, ()>,
-    ) {
+    pub(crate) fn halt_and_rebuild(&mut self, host: &Host, input: &VDom<Vec<VDomTree>, ()>) {
         self.halt();
         self.rebuild_dom(host, input);
     }
 
-    pub(crate) fn step(&mut self, host: &Host, input: &VDom<'a, Vec<VDomTree<'a>>, ()>) {
+    pub(crate) fn step(&mut self, host: &Host, input: &VDom<Vec<VDomTree>, ()>) {
         match input {
             VDom::Text { text: tnew, .. } => match &mut self.vdom {
                 VDom::Text {
@@ -95,7 +94,7 @@ impl<'a> VDomMachine<'a> {
                 } => {
                     if tnew != told {
                         node.set_text_content(tnew);
-                        *told = tnew;
+                        *told = tnew.clone();
                     }
                 }
                 VDom::Elem { .. } => {
@@ -111,8 +110,8 @@ impl<'a> VDomMachine<'a> {
                 match std::mem::replace(
                     &mut self.vdom,
                     VDom::Text {
-                        text: "DELME",
-                        state: Node::dummyNode(),
+                        text: String::new(),
+                        state: Node::dummy_node(),
                     },
                 ) {
                     VDom::Elem {
@@ -186,11 +185,11 @@ fn update_attrs(node: &mut Node, attrs_old: &Attrs, attrs_new: &Attrs) {
         });
 }
 
-fn update_children<'a>(
+fn update_children(
     host: &Host,
     parent: &mut Node,
-    children_old: &mut Vec<VDomMachine<'a>>,
-    children_new: &Vec<VDomTree<'a>>,
+    children_old: &mut Vec<VDomMachine>,
+    children_new: &Vec<VDomTree>,
 ) {
     children_old
         .iter_mut()

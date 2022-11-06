@@ -1,6 +1,10 @@
+use dom::run;
+
+pub mod dom;
 pub mod host;
 pub mod vdom;
 
 fn main() {
-    println!("Hello, world!");
+    run();
+    // println!("Hello, world!");
 }
