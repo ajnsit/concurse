@@ -19,19 +19,26 @@ pub(crate) enum VDom<Children, State> {
 }
 
 pub(crate) struct VDomTree {
-    vdom: VDom<Vec<VDomTree>, ()>,
+    pub(crate) vdom: VDom<Vec<VDomTree>, ()>,
 }
 
 pub(crate) struct VDomMachine {
-    vdom: VDom<Vec<VDomMachine>, Node>,
+    pub(crate) vdom: VDom<Vec<VDomMachine>, Node>,
 }
 
 impl VDomMachine {
+    pub(crate) fn install(&self, host: &Host) {}
+
     pub(crate) fn get_node(vdom: &VDom<Vec<VDomMachine>, Node>) -> &Node {
         match vdom {
             VDom::Text { state, .. } => state,
             VDom::Elem { state, .. } => state,
         }
+    }
+
+    pub(crate) fn build_vdom_machine(host: &Host, input: &VDomTree) -> VDomMachine {
+        let vdom = VDomMachine::build_vdom(host, &input.vdom);
+        VDomMachine { vdom }
     }
 
     pub(crate) fn build_vdom(
@@ -61,8 +68,7 @@ impl VDomMachine {
                     .map(|child| {
                         let child_vdom = VDomMachine::build_vdom(host, &child.vdom);
                         let child_node = VDomMachine::get_node(&child_vdom);
-                        // TODO: Insert at the correct index
-                        node.insert_child_ix(0, child_node);
+                        node.append_child(child_node);
                         VDomMachine { vdom: child_vdom }
                     })
                     .collect();
@@ -146,16 +152,18 @@ impl VDomMachine {
     pub(crate) fn halt(&mut self) {
         match &mut self.vdom {
             VDom::Text { state: node, .. } => {
-                let parent = node.parent_node();
-                parent.remove_child(&node);
+                if let Some(parent) = node.parent_node() {
+                    parent.remove_child(&node)
+                }
             }
             VDom::Elem {
                 children,
                 state: node,
                 ..
             } => {
-                let parent = node.parent_node();
-                parent.remove_child(&node);
+                if let Some(parent) = node.parent_node() {
+                    parent.remove_child(&node)
+                }
                 children.iter_mut().for_each(|x| {
                     x.halt();
                 });
@@ -210,7 +218,7 @@ fn update_children(
             let child_vdom = VDomMachine::build_vdom(host, &child_new.vdom);
             let child_node = VDomMachine::get_node(&child_vdom);
             // TODO: Insert at the correct index
-            parent.insert_child_ix(0, child_node);
+            parent.append_child(child_node);
             children_old.push(VDomMachine { vdom: child_vdom });
         });
 }

@@ -24,41 +24,40 @@ pub enum Node {
 }
 
 pub(crate) struct Evt;
+pub(crate) struct Listener;
 
 impl Node {
     pub(crate) fn set_text_content(&mut self, str: &str) {
-        // match self {
-        //     Node::Text(_) => *self = Node::Text(str),
-        //     Node::Button(b) => b.set_label(str.as_str()),
-        //     Node::Output(o) => o.set_label(str.as_str()),
-        // }
-    }
-    pub(crate) fn insert_child_ix(&self, index: i32, child: &Node) {
-        // match self {
-        //     Node::Text(_) => {}
-        //     Node::Button(b) => b.,
-        //     Node::Output(_) => todo!(),
-        // }
-    }
-    pub(crate) fn remove_child(&self, _child: &Node) {
         todo!()
     }
-    pub(crate) fn parent_node(&self) -> &Node {
+    pub(crate) fn append_child(&self, child: &Node) {
         todo!()
     }
-    pub(crate) fn set_attribute(&self, _key: &str, _val: &str) {
+    pub(crate) fn insert_child_before(&self, existing: &Node, child: &Node) {
         todo!()
     }
-    pub(crate) fn remove_attribute(&self, _key: &str) {
+    pub(crate) fn remove_child(&self, child: &Node) {
         todo!()
     }
-    pub(crate) fn has_attribute(&self, _key: &str) -> bool {
+    pub(crate) fn parent_node(&self) -> Option<Node> {
         todo!()
     }
-    pub(crate) fn add_event_listener(&self, _event_name: &str, _handler: Box<dyn Fn(Evt)>) {
+    pub(crate) fn set_attribute(&self, key: &str, val: &str) {
         todo!()
     }
-    pub(crate) fn remove_event_listener(&self, _event_name: &str, _handler: Box<dyn Fn(Evt)>) {
+    pub(crate) fn remove_attribute(&self, key: &str) {
+        todo!()
+    }
+    pub(crate) fn has_attribute(&self, key: &str) -> bool {
+        todo!()
+    }
+    pub(crate) fn make_event_listener(&self, handler: Box<dyn Fn()>) -> Listener {
+        todo!()
+    }
+    pub(crate) fn add_event_listener(&self, event_name: &str, handler: Listener) {
+        todo!()
+    }
+    pub(crate) fn remove_event_listener(&self, event_name: &str, handler: Listener) {
         todo!()
     }
 
