@@ -15,6 +15,14 @@ impl Host {
             _ => panic!("Invalid element type"),
         }
     }
+
+    pub(crate) fn install(&self, node: &Node) {
+        todo!()
+    }
+
+    pub(crate) fn make_event_listener<A>(handler: Box<dyn Fn(A)>) -> Listener<A> {
+        Listener { handler }
+    }
 }
 
 pub enum Node {
@@ -23,8 +31,11 @@ pub enum Node {
     Output(),
 }
 
-pub(crate) struct Evt;
-pub(crate) struct Listener;
+pub(crate) struct Evt {}
+
+pub(crate) struct Listener<A> {
+    handler: Box<dyn Fn(A)>,
+}
 
 impl Node {
     pub(crate) fn set_text_content(&mut self, str: &str) {
@@ -51,13 +62,10 @@ impl Node {
     pub(crate) fn has_attribute(&self, key: &str) -> bool {
         todo!()
     }
-    pub(crate) fn make_event_listener(&self, handler: Box<dyn Fn()>) -> Listener {
+    pub(crate) fn add_event_listener<A>(&self, event_name: &str, handler: &Listener<A>) {
         todo!()
     }
-    pub(crate) fn add_event_listener(&self, event_name: &str, handler: Listener) {
-        todo!()
-    }
-    pub(crate) fn remove_event_listener(&self, event_name: &str, handler: Listener) {
+    pub(crate) fn remove_event_listener<A>(&self, event_name: &str, handler: &Listener<A>) {
         todo!()
     }
 
