@@ -1,7 +1,5 @@
 use do_notation::{m, Lift};
 
-use crate::vdom::VDomMachine;
-
 fn foo() {
     let r = m! {
         x <- Some(1);

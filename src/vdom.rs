@@ -4,126 +4,118 @@ use std::collections::HashMap;
 
 use crate::host::{Host, Listener, Node};
 
-pub(crate) enum Attr<F> {
+pub(crate) enum Attr<L> {
     StringAttr(String),
-    EventHandler(F),
+    EventHandler(L),
 }
 
-type Attrs<A> = HashMap<String, Attr<A>>;
+pub(crate) type HashmapAttrs<A> = HashMap<String, A>;
+pub(crate) type Attrs = HashmapAttrs<Attr<Listener>>;
 
-type Handler<A> = Box<dyn Fn(A)>;
-// type TreeAttrs<A> = Attrs<Handler<A>>;
-type MachineAttrs<A> = Attrs<Listener<A>>;
-
-pub(crate) enum VDom<Children, State, A> {
+pub(crate) enum VDomNode<Children, State, Attributes> {
     Text {
         text: String,
         state: State,
     },
     Elem {
         name: String,
-        attrs: Attrs<A>,
+        attrs: Attributes,
         children: Children,
         state: State,
     },
 }
 
-pub(crate) struct VDomTree<A> {
-    pub(crate) vdom: VDom<Vec<VDomTree<A>>, (), Listener<A>>,
+pub(crate) struct VDom<State> {
+    pub(crate) vdom: VDomNode<Vec<VDom<State>>, State, Attrs>,
 }
 
-pub(crate) struct VDomMachine<A> {
-    pub(crate) vdom: VDom<Vec<VDomMachine<A>>, Node, Listener<A>>,
-}
-
-struct VDomMachineOps;
-impl VDomMachineOps {
-    pub(crate) fn build<B>(host: &Host, input: VDomTree<B>) -> VDomMachine<B> {
-        VDomMachine {
-            vdom: match input.vdom {
-                VDom::Text { text, .. } => VDom::Text {
-                    text: text.clone(),
-                    state: host.create_text_node(&text),
-                },
-                VDom::Elem {
-                    name,
-                    attrs,
-                    children: children1,
-                    ..
-                } => {
-                    // Attach attributes
-                    let node = host.create_element(&name);
-                    let attrs_new = attrs
-                        .into_iter()
-                        .map(|(key, val)| match val {
-                            Attr::StringAttr(v) => {
-                                node.set_attribute(&key, &v);
-                                (key, Attr::StringAttr(v))
-                            }
-                            Attr::EventHandler(listener) => {
-                                // let listener = Host::make_event_listener(Box::new(handler));
-                                node.add_event_listener(&key, &listener);
-                                (key, Attr::EventHandler(listener))
-                            }
-                        })
-                        .collect();
-                    // Attach children
-                    let children = children1
-                        .into_iter()
-                        .map(|vdom| {
-                            let child: VDomMachine<B> = VDomMachineOps::build(host, vdom);
-                            node.append_child(child.node());
-                            child
-                        })
-                        .collect();
-                    // Return the machine
-                    VDom::Elem {
-                        name,
-                        attrs: attrs_new,
-                        children,
-                        state: node,
-                    }
-                }
+pub(crate) fn build(host: &Host, input: VDom<()>) -> VDom<Node> {
+    VDom {
+        vdom: match input.vdom {
+            VDomNode::Text { text, .. } => VDomNode::Text {
+                text: text.clone(),
+                state: host.create_text_node(&text),
             },
-        }
+            VDomNode::Elem {
+                name,
+                attrs,
+                children: children1,
+                ..
+            } => {
+                // Attach attributes
+                let node = host.create_element(&name);
+                let attrs_new = attrs
+                    .into_iter()
+                    .map(|(key, val)| match val {
+                        Attr::StringAttr(v) => {
+                            node.set_attribute(&key, &v);
+                            (key, Attr::StringAttr(v))
+                        }
+                        Attr::EventHandler(handler) => {
+                            // let listener = Listener {
+                            //     handler: Box::new(|| handler(runner)),
+                            // };
+                            node.add_event_listener(&key, &handler);
+                            (key, Attr::EventHandler(handler))
+                        }
+                    })
+                    .collect();
+                // Attach children
+                let children = children1
+                    .into_iter()
+                    .map(|vdom| {
+                        let child = build(host, vdom);
+                        node.append_child(child.node());
+                        child
+                    })
+                    .collect();
+                // Return the machine
+                VDomNode::Elem {
+                    name,
+                    attrs: attrs_new,
+                    children,
+                    state: node,
+                }
+            }
+        },
     }
 }
 
-impl<A> VDomMachine<A> {
+impl VDom<Node> {
     pub(crate) fn install(&self, host: &Host) {
         host.install(self.node());
     }
 
     pub(crate) fn node(&self) -> &Node {
         match &self.vdom {
-            VDom::Text { state, .. } => state,
-            VDom::Elem { state, .. } => state,
+            VDomNode::Text { state, .. } => state,
+            VDomNode::Elem { state, .. } => state,
         }
     }
 
-    pub(crate) fn step<B>(mut self, host: &Host, input: VDomTree<B>) -> VDomMachine<B> {
+    pub(crate) fn step(mut self, host: &Host, input: VDom<()>) -> VDom<Node> {
         match input.vdom {
-            VDom::Text { text: tnew, .. } => match self.vdom {
-                VDom::Text {
+            VDomNode::Text { text: tnew, .. } => match self.vdom {
+                VDomNode::Text {
                     text: told,
                     state: mut node,
                 } => {
                     if tnew != *told {
                         node.set_text_content(&tnew);
                     }
-                    VDomMachine {
-                        vdom: VDom::Text {
+                    VDom {
+                        vdom: VDomNode::Text {
                             text: tnew.clone(),
                             state: node,
                         },
                     }
                 }
-                VDom::Elem { .. } => {
+                VDomNode::Elem { .. } => {
                     self.halt();
-                    VDomMachineOps::build(
+                    build(
                         host,
-                        VDomTree {
-                            vdom: VDom::Text {
+                        VDom {
+                            vdom: VDomNode::Text {
                                 text: tnew,
                                 state: (),
                             },
@@ -131,13 +123,13 @@ impl<A> VDomMachine<A> {
                     )
                 }
             },
-            VDom::Elem {
+            VDomNode::Elem {
                 name: name_new,
                 attrs: attrs_new,
                 children: children_new,
                 ..
             } => match self.vdom {
-                VDom::Elem {
+                VDomNode::Elem {
                     name: name_old,
                     attrs: attrs_old,
                     children: children_old,
@@ -146,8 +138,8 @@ impl<A> VDomMachine<A> {
                     if name_new == *name_old {
                         // TODO: Update attrs
                         update_attrs(&mut node, &attrs_old, &attrs_new);
-                        VDomMachine {
-                            vdom: VDom::Elem {
+                        VDom {
+                            vdom: VDomNode::Elem {
                                 name: name_old.clone(),
                                 attrs: attrs_new,
                                 children: update_children(
@@ -160,8 +152,8 @@ impl<A> VDomMachine<A> {
                             },
                         }
                     } else {
-                        let mut newself = VDomMachine {
-                            vdom: VDom::Elem {
+                        let mut newself = VDom {
+                            vdom: VDomNode::Elem {
                                 name: name_old,
                                 attrs: attrs_old,
                                 children: children_old,
@@ -169,10 +161,10 @@ impl<A> VDomMachine<A> {
                             },
                         };
                         newself.halt();
-                        VDomMachineOps::build(
+                        build(
                             host,
-                            VDomTree {
-                                vdom: VDom::Elem {
+                            VDom {
+                                vdom: VDomNode::Elem {
                                     name: name_new,
                                     attrs: attrs_new,
                                     children: children_new,
@@ -182,15 +174,15 @@ impl<A> VDomMachine<A> {
                         )
                     }
                 }
-                VDom::Text { text, state } => {
-                    let mut newself: VDomMachine<A> = VDomMachine {
-                        vdom: VDom::Text { text, state },
+                VDomNode::Text { text, state } => {
+                    let mut newself = VDom {
+                        vdom: VDomNode::Text { text, state },
                     };
                     newself.halt();
-                    VDomMachineOps::build(
+                    build(
                         host,
-                        VDomTree {
-                            vdom: VDom::Elem {
+                        VDom {
+                            vdom: VDomNode::Elem {
                                 name: name_new,
                                 attrs: attrs_new,
                                 children: children_new,
@@ -205,12 +197,12 @@ impl<A> VDomMachine<A> {
 
     pub(crate) fn halt(&mut self) {
         match &mut self.vdom {
-            VDom::Text { state: node, .. } => {
+            VDomNode::Text { state: node, .. } => {
                 if let Some(parent) = node.parent_node() {
                     parent.remove_child(&node)
                 }
             }
-            VDom::Elem {
+            VDomNode::Elem {
                 children,
                 state: node,
                 ..
@@ -227,14 +219,16 @@ impl<A> VDomMachine<A> {
     }
 }
 
-fn update_attrs<A, B>(node: &mut Node, attrs_old: &MachineAttrs<A>, attrs_new: &MachineAttrs<B>) {
+fn update_attrs(node: &mut Node, attrs_old: &Attrs, attrs_new: &Attrs) {
     // TODO: Do a more efficient diff and update attrs on the node?
     attrs_new
         .iter()
         .for_each(|(key, val)| match attrs_old.get(key) {
             None => match val {
                 Attr::StringAttr(s) => node.set_attribute(key, s),
-                Attr::EventHandler(listener) => node.add_event_listener(&key, &listener),
+                Attr::EventHandler(handler) => {
+                    node.add_event_listener(&key, &handler);
+                }
             },
             Some(val_old) => match (val, val_old) {
                 (Attr::StringAttr(val), Attr::StringAttr(_)) => node.set_attribute(&key, &val),
@@ -242,24 +236,24 @@ fn update_attrs<A, B>(node: &mut Node, attrs_old: &MachineAttrs<A>, attrs_new: &
                     node.remove_event_listener(&key, listener);
                     node.set_attribute(&key, val);
                 }
-                (Attr::EventHandler(listener), Attr::StringAttr(_)) => {
+                (Attr::EventHandler(handler), Attr::StringAttr(_)) => {
                     node.remove_attribute(&key);
-                    node.add_event_listener(&key, &listener);
+                    node.add_event_listener(&key, &handler);
                 }
-                (Attr::EventHandler(listener), Attr::EventHandler(listener_old)) => {
+                (Attr::EventHandler(handler), Attr::EventHandler(listener_old)) => {
                     node.remove_event_listener(&key, listener_old);
-                    node.add_event_listener(&key, &listener);
+                    node.add_event_listener(&key, &handler);
                 }
             },
         });
 }
 
-fn update_children<A, B>(
+fn update_children(
     host: &Host,
     parent: &mut Node,
-    children_old: Vec<VDomMachine<A>>,
-    vdoms: Vec<VDomTree<B>>,
-) -> Vec<VDomMachine<B>> {
+    children_old: Vec<VDom<Node>>,
+    vdoms: Vec<VDom<()>>,
+) -> Vec<VDom<Node>> {
     children_old
         .into_iter()
         .zip_longest(vdoms)
@@ -270,7 +264,7 @@ fn update_children<A, B>(
                 None
             }
             Right(vdom) => {
-                let child = VDomMachineOps::build(host, vdom);
+                let child = build(host, vdom);
                 // TODO: Insert at the correct index
                 parent.append_child(child.node());
                 Some(child)
