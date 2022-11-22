@@ -33,11 +33,18 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
         &host,
         VDom {
             vdom: VDomNode::Elem {
-                name: "button".to_owned(),
+                name: "div".to_owned(),
                 attrs: HashMap::default(),
                 children: Vec::from([(VDom {
-                    vdom: VDomNode::Text {
-                        text: format!("CLICKED {}, from Rust!", name),
+                    vdom: VDomNode::Elem {
+                        name: "button".to_owned(),
+                        attrs: HashMap::default(),
+                        children: Vec::from([(VDom {
+                            vdom: VDomNode::Text {
+                                text: format!("CLICKED {}, from Rust!", name),
+                                state: (),
+                            },
+                        })]),
                         state: (),
                     },
                 })]),
@@ -58,30 +65,44 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
             &host,
             VDom {
                 vdom: VDomNode::Elem {
-                    name: "button".to_owned(),
-                    attrs: HashMap::from([(
-                        "click".to_owned(),
-                        Attr::EventHandler(Listener {
-                            handler: Closure::once(move || {
-                                arc2.as_ref()
-                                    .lock()
-                                    .expect("Failed to lock machine for stepping")
-                                    .step(
-                                        &host2,
-                                        VDom {
-                                            vdom: VDomNode::Text {
-                                                text: "Clicked!".to_owned(),
-                                                state: (),
-                                            },
-                                        },
-                                    );
-                                alert("CLICKED!");
-                            }),
-                        }),
-                    )]),
+                    name: "div".to_owned(),
+                    attrs: HashMap::default(),
                     children: Vec::from([(VDom {
-                        vdom: VDomNode::Text {
-                            text: format!("Hello to {}, from Rust!", name),
+                        vdom: VDomNode::Elem {
+                            name: "button".to_owned(),
+                            attrs: HashMap::from([(
+                                "click".to_owned(),
+                                Attr::EventHandler(Listener {
+                                    handler: Closure::once(move || {
+                                        arc2.as_ref()
+                                            .lock()
+                                            .expect("Failed to lock machine for stepping")
+                                            .step(
+                                                &host2,
+                                                VDom {
+                                                    vdom: VDomNode::Elem {
+                                                        name: "div".to_owned(),
+                                                        attrs: HashMap::default(),
+                                                        children: Vec::from([(VDom {
+                                                            vdom: VDomNode::Text {
+                                                                text: "Clicked!".to_owned(),
+                                                                state: (),
+                                                            },
+                                                        })]),
+                                                        state: (),
+                                                    },
+                                                },
+                                            );
+                                        alert("CLICKED!");
+                                    }),
+                                }),
+                            )]),
+                            children: Vec::from([(VDom {
+                                vdom: VDomNode::Text {
+                                    text: format!("Hello to {}, from Rust!", name),
+                                    state: (),
+                                },
+                            })]),
                             state: (),
                         },
                     })]),
