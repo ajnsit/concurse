@@ -2,9 +2,9 @@ use wasm_bindgen::{prelude::Closure, JsCast};
 use web_sys::{Document, Element, HtmlElement, Window};
 
 pub(crate) struct Host {
-    window: Window,
-    document: Document,
-    body: HtmlElement,
+    pub(crate) window: Window,
+    pub(crate) document: Document,
+    pub(crate) body: HtmlElement,
 }
 
 impl Host {
