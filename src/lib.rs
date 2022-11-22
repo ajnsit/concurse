@@ -1,6 +1,7 @@
 pub mod dom;
 pub mod host;
 pub mod vdom;
+pub mod log;
 
 use dom::test;
 use wasm_bindgen::prelude::*;

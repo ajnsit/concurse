@@ -3,6 +3,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::host::{Host, Listener, Node};
+use crate::log;
 
 pub(crate) enum Attr<L> {
     StringAttr(String),
@@ -95,11 +96,14 @@ impl VDom<Node> {
         host.install(self.vdom.node());
     }
 
-    pub(crate) fn halt(&mut self) {
+    pub(crate) fn halt(&mut self) -> Option<Node> {
         match &mut self.vdom {
             VDomNode::Text { state: node, .. } => {
                 if let Some(parent) = node.parent_node() {
-                    parent.remove_child(&node)
+                    parent.remove_child(&node);
+                    Some(parent)
+                } else {
+                    None
                 }
             }
             VDomNode::Elem {
@@ -107,32 +111,45 @@ impl VDom<Node> {
                 state: node,
                 ..
             } => {
-                if let Some(parent) = node.parent_node() {
-                    parent.remove_child(&node)
-                }
+                let ret = if let Some(parent) = node.parent_node() {
+                    parent.remove_child(&node);
+                    Some(parent)
+                } else {
+                    None
+                };
                 children.iter_mut().for_each(|x| {
                     x.halt();
                 });
+                // TODO: Cleanup attrs
                 // attrs.halt();
+                ret
             }
         }
     }
 
+    pub(crate) fn halt_and_build(&mut self, host: &Host, input: VDom<()>) {
+        let parent = self.halt();
+        parent.map(|p| {
+            self.vdom = build(host, input);
+            // TODO: Insert in the same place as prev node
+            p.append_child(self.vdom.node());
+        });
+    }
+
     pub(crate) fn step(&mut self, host: &Host, input: VDom<()>) {
         match input.vdom {
-            VDomNode::Text { text: tnew, .. } => match self.vdom {
+            VDomNode::Text { text: tnew, .. } => match &mut self.vdom {
                 VDomNode::Text {
                     text: told,
-                    state: mut node,
+                    state: node,
                 } => {
                     if tnew != *told {
                         node.set_text_content(&tnew);
+                        *told = tnew;
                     }
-                    told = tnew;
                 }
                 VDomNode::Elem { .. } => {
-                    self.halt();
-                    self.vdom = build(
+                    self.halt_and_build(
                         host,
                         VDom {
                             vdom: VDomNode::Text {
@@ -148,21 +165,20 @@ impl VDom<Node> {
                 attrs: attrs_new,
                 children: children_new,
                 ..
-            } => match self.vdom {
+            } => match &mut self.vdom {
                 VDomNode::Elem {
                     name: name_old,
                     attrs: attrs_old,
                     children: children_old,
-                    state: mut node,
+                    state: node,
                 } => {
                     if name_new == *name_old {
                         // TODO: Update attrs
-                        update_attrs(&mut node, &attrs_old, &attrs_new);
-                        attrs_old = attrs_new;
-                        children_old = update_children(host, &mut node, children_old, children_new);
+                        update_attrs(node, &attrs_old, &attrs_new);
+                        *attrs_old = attrs_new;
+                        update_children(host, node, children_old, children_new);
                     } else {
-                        self.halt();
-                        self.vdom = build(
+                        self.halt_and_build(
                             host,
                             VDom {
                                 vdom: VDomNode::Elem {
@@ -175,9 +191,8 @@ impl VDom<Node> {
                         );
                     }
                 }
-                VDomNode::Text { text, state } => {
-                    self.halt();
-                    self.vdom = build(
+                VDomNode::Text { .. } => {
+                    self.halt_and_build(
                         host,
                         VDom {
                             vdom: VDomNode::Elem {
@@ -226,6 +241,17 @@ fn update_attrs(node: &mut Node, attrs_old: &Attrs, attrs_new: &Attrs) {
 fn update_children(
     host: &Host,
     parent: &mut Node,
+    children: &mut Vec<VDom<Node>>,
+    vdoms: Vec<VDom<()>>,
+) {
+    let mut cs = std::mem::take(children);
+    cs = update_children1(host, parent, cs, vdoms);
+    std::mem::swap(&mut cs, children);
+}
+
+fn update_children1(
+    host: &Host,
+    parent: &mut Node,
     children_old: Vec<VDom<Node>>,
     vdoms: Vec<VDom<()>>,
 ) -> Vec<VDom<Node>> {
@@ -233,7 +259,7 @@ fn update_children(
         .into_iter()
         .zip_longest(vdoms)
         .filter_map(|zip| match zip {
-            Both(child_old, vdom) => {
+            Both(mut child_old, vdom) => {
                 child_old.step(host, vdom);
                 Some(child_old)
             }
