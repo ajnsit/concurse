@@ -3,7 +3,6 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::host::{Host, Listener, Node};
-use crate::log;
 
 pub(crate) enum Attr<L> {
     StringAttr(String),
