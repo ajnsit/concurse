@@ -29,18 +29,18 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
     // If the references are not static then the unsafe stuff below to replicate refs will cause runtime errors
     let mref = Box::<VDom<Node>>::leak(Box::new(machine));
     let href = Box::<Host>::leak(Box::new(host));
+    let m1 = mref as *mut VDom<Node>;
+    let mref1: &'static mut VDom<Node> = unsafe { &mut *m1 };
 
-    let vdom = counter(href, mref, 0);
+    let vdom = counter(href, mref1, 0);
     mref.step(href, vdom);
 
     Ok(())
 }
 
-// The mref that counter takes MUST be static, but we can't enforce that at the type level right now
-// TODO: Why can't we make the arg mref: &'static mut VDom<Node>?????
-fn counter(href: &'static Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
+fn counter(href: &'static Host, mref: &'static mut VDom<Node>, count: i32) -> VDom<()> {
     let m1 = mref as *mut VDom<Node>;
-    let mref1 = unsafe { &mut *m1 };
+    let mref1: &'static mut VDom<Node> = unsafe { &mut *m1 };
     VDom {
         vdom: VDomNode::Elem {
             name: "div".to_owned(),
@@ -51,11 +51,11 @@ fn counter(href: &'static Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
                     attrs: HashMap::from([(
                         "click".to_owned(),
                         Attr::EventHandler(Listener {
-                            handler: Closure::once(move || {
-                                let vdom = counter(href, mref1, count + 1);
+                            handler: Closure::once(annotate(move || {
+                                let vdom = counter(href, mref, count + 1);
                                 mref1.step(href, vdom);
                                 log!("CLICKED!");
-                            }),
+                            })),
                         }),
                     )]),
                     children: Vec::from([(VDom {
@@ -70,4 +70,11 @@ fn counter(href: &'static Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
             state: (),
         },
     }
+}
+
+fn annotate<F>(f: F) -> F
+where
+    F: 'static + FnOnce(),
+{
+    f
 }
