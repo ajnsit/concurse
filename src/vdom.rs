@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use crate::host::{Host, Listener, Node};
 
+#[derive(Clone)]
 pub(crate) enum Attr<L> {
     StringAttr(String),
     EventHandler(L),
@@ -12,7 +13,7 @@ pub(crate) enum Attr<L> {
 pub(crate) type HashmapAttrs<A> = HashMap<String, A>;
 pub(crate) type Attrs = HashmapAttrs<Attr<Listener>>;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Text<State> {
     text: String,
     state: State,
@@ -29,6 +30,7 @@ impl<State> Text<State> {
     }
 }
 
+#[derive(Clone)]
 pub struct Elem<Attributes, Children, State> {
     name: String,
     attrs: Attributes,
@@ -44,6 +46,13 @@ impl<Attributes, Children, State> Elem<Attributes, Children, State> {
             children,
             state,
         }
+    }
+
+    pub fn update(&mut self, new_elem_struct: Elem<Attributes, Children, State>) {
+        self.name = new_elem_struct.name;
+        self.attrs = new_elem_struct.attrs;
+        self.children = new_elem_struct.children;
+        self.state = new_elem_struct.state;
     }
 }
 
@@ -165,7 +174,7 @@ impl VDom<Node> {
 
     pub(crate) fn step(&mut self, host: &Host, input: VDom<()>) {
         match input.vdom {
-            VDomNode::Text(new) => match self.vdom {
+            VDomNode::Text(mut new) => match self.vdom {
                 VDomNode::Text(mut old) => {
                     let mut node = old.state;
                     if new.text != old.text {
@@ -174,53 +183,46 @@ impl VDom<Node> {
                     }
                 }
                 VDomNode::Elem(elem) => {
-                    let new_vdom: VDom<()> = VDom::new(VDomNode::new_text(new.text.clone(), ()));
-                    self.halt_and_build(host, new_vdom);
+                    let node = VDomNode::Text(Text {
+                        text: new.text.clone(),
+                        state: (),
+                    });
+                    self.halt_and_build(host, VDom { vdom: node });
                 }
             },
-            VDomNode::Elem {
-                name: name_new,
-                attrs: attrs_new,
-                children: children_new,
-                ..
-            } => match &mut self.vdom {
-                VDomNode::Elem {
-                    name: name_old,
-                    attrs: attrs_old,
-                    children: children_old,
-                    state: node,
-                } => {
-                    if name_new == *name_old {
+            VDomNode::Elem(mut new) => match self.vdom {
+                VDomNode::Elem(mut old) => {
+                    let mut node = old.state;
+                    let attrs_old = old.attrs;
+                    let attrs_new = new.attrs;
+                    if new.name == old.name {
                         // TODO: Update attrs
-                        update_attrs(node, &attrs_old, &attrs_new);
-                        *attrs_old = attrs_new;
-                        update_children(host, node, children_old, children_new);
+                        update_attrs(&mut node, &attrs_old, &attrs_new);
+                        old.update(Elem::new(
+                            old.name,
+                            attrs_new.clone(),
+                            old.children,
+                            old.state,
+                        ));
+                        update_children(host, &mut node, &mut old.children, new.children);
                     } else {
-                        self.halt_and_build(
-                            host,
-                            VDom {
-                                vdom: VDomNode::Elem {
-                                    name: name_new,
-                                    attrs: attrs_new,
-                                    children: children_new,
-                                    state: (),
-                                },
-                            },
-                        );
+                        let node = VDomNode::Elem(Elem {
+                            name: new.name,
+                            attrs: attrs_new.clone(),
+                            children: new.children,
+                            state: (),
+                        });
+                        self.halt_and_build(host, VDom { vdom: node });
                     }
                 }
-                VDomNode::Text { .. } => {
-                    self.halt_and_build(
-                        host,
-                        VDom {
-                            vdom: VDomNode::Elem {
-                                name: name_new,
-                                attrs: attrs_new,
-                                children: children_new,
-                                state: (),
-                            },
-                        },
-                    );
+                VDomNode::Text(text) => {
+                    let node = VDomNode::Elem(Elem {
+                        name: new.name,
+                        attrs: new.attrs,
+                        children: new.children,
+                        state: (),
+                    });
+                    self.halt_and_build(host, VDom { vdom: node });
                 }
             },
         }

@@ -43,6 +43,7 @@ pub struct Node {
     element: Element,
 }
 
+#[derive(Clone)]
 pub(crate) struct Listener {
     // handler: fn(),
     pub(crate) handler: Closure<dyn FnMut()>,
