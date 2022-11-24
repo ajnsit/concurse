@@ -198,17 +198,12 @@ impl VDom<Node> {
                     if new.name == old.name {
                         // TODO: Update attrs
                         update_attrs(&mut node, &attrs_old, &attrs_new);
-                        old.update(Elem::new(
-                            old.name,
-                            attrs_new.clone(),
-                            old.children,
-                            old.state,
-                        ));
+                        old.update(Elem::new(old.name, attrs_new, old.children, old.state));
                         update_children(host, &mut node, &mut old.children, new.children);
                     } else {
                         let node = VDomNode::Elem(Elem {
                             name: new.name,
-                            attrs: attrs_new.clone(),
+                            attrs: attrs_new,
                             children: new.children,
                             state: (),
                         });
