@@ -26,22 +26,21 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
     machine.install(&host);
 
     // Get 'static references by putting stuff in the heap
+    // If the references are not static then the unsafe stuff below to replicate refs will cause runtime errors
     let mref = Box::<VDom<Node>>::leak(Box::new(machine));
     let href = Box::<Host>::leak(Box::new(host));
 
-    // Run
-    let m1 = mref as *mut VDom<Node>;
-    let vdom = counter(href, unsafe { &mut *m1 }, 0);
+    let vdom = counter(href, mref, 0);
     mref.step(href, vdom);
 
     Ok(())
 }
 
-fn counter(href: &Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
+// The mref that counter takes MUST be static, but we can't enforce that at the type level right now
+// TODO: Why can't we make the arg mref: &'static mut VDom<Node>?????
+fn counter(href: &'static Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
     let m1 = mref as *mut VDom<Node>;
     let mref1 = unsafe { &mut *m1 };
-    let h1 = href as *const Host;
-    let href1 = unsafe { &*h1 };
     VDom {
         vdom: VDomNode::Elem {
             name: "div".to_owned(),
@@ -53,8 +52,8 @@ fn counter(href: &Host, mref: &mut VDom<Node>, count: i32) -> VDom<()> {
                         "click".to_owned(),
                         Attr::EventHandler(Listener {
                             handler: Closure::once(move || {
-                                let vdom = counter(href1, mref1, count + 1);
-                                mref1.step(href1, vdom);
+                                let vdom = counter(href, mref1, count + 1);
+                                mref1.step(href, vdom);
                                 log!("CLICKED!");
                             }),
                         }),
