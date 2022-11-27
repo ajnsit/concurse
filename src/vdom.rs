@@ -12,17 +12,21 @@ pub(crate) enum Attr<L> {
 pub(crate) type HashmapAttrs<A> = HashMap<String, A>;
 pub(crate) type Attrs = HashmapAttrs<Attr<Listener>>;
 
+pub(crate) struct Elem<Children, State, Attributes> {
+    pub(crate) name: String,
+    pub(crate) attrs: Attributes,
+    pub(crate) children: Children,
+    pub(crate) state: State,
+}
+
+pub(crate) struct Text<State> {
+    pub(crate) text: String,
+    pub(crate) state: State,
+}
+
 pub(crate) enum VDomNode<Children, State, Attributes> {
-    Text {
-        text: String,
-        state: State,
-    },
-    Elem {
-        name: String,
-        attrs: Attributes,
-        children: Children,
-        state: State,
-    },
+    Text(Text<State>),
+    Elem(Elem<Children, State, Attributes>),
 }
 
 pub(crate) struct VDom<State> {
@@ -31,16 +35,16 @@ pub(crate) struct VDom<State> {
 
 pub(crate) fn build(host: &Host, input: VDom<()>) -> VDomNode<Vec<VDom<Node>>, Node, Attrs> {
     match input.vdom {
-        VDomNode::Text { text, .. } => VDomNode::Text {
+        VDomNode::Text(Text { text, .. }) => VDomNode::Text(Text {
             text: text.clone(),
             state: host.create_text_node(&text),
-        },
-        VDomNode::Elem {
+        }),
+        VDomNode::Elem(Elem {
             name,
             attrs,
             children: children1,
             ..
-        } => {
+        }) => {
             // Attach attributes
             let node = host.create_element(&name);
             let attrs_new = attrs
@@ -71,12 +75,12 @@ pub(crate) fn build(host: &Host, input: VDom<()>) -> VDomNode<Vec<VDom<Node>>, N
                 })
                 .collect();
             // Return the machine
-            VDomNode::Elem {
+            VDomNode::Elem(Elem {
                 name,
                 attrs: attrs_new,
                 children,
                 state: node,
-            }
+            })
         }
     }
 }
@@ -84,8 +88,8 @@ pub(crate) fn build(host: &Host, input: VDom<()>) -> VDomNode<Vec<VDom<Node>>, N
 impl VDomNode<Vec<VDom<Node>>, Node, Attrs> {
     pub(crate) fn node(&self) -> &Node {
         match self {
-            VDomNode::Text { state, .. } => state,
-            VDomNode::Elem { state, .. } => state,
+            VDomNode::Text(Text { state, .. }) => state,
+            VDomNode::Elem(Elem { state, .. }) => state,
         }
     }
 }
@@ -97,7 +101,7 @@ impl VDom<Node> {
 
     pub(crate) fn halt(&mut self) -> Option<Node> {
         match &mut self.vdom {
-            VDomNode::Text { state: node, .. } => {
+            VDomNode::Text(Text { state: node, .. }) => {
                 if let Some(parent) = node.parent_node() {
                     parent.remove_child(&node);
                     Some(parent)
@@ -105,11 +109,11 @@ impl VDom<Node> {
                     None
                 }
             }
-            VDomNode::Elem {
+            VDomNode::Elem(Elem {
                 children,
                 state: node,
                 ..
-            } => {
+            }) => {
                 let ret = if let Some(parent) = node.parent_node() {
                     parent.remove_child(&node);
                     Some(parent)
@@ -137,40 +141,40 @@ impl VDom<Node> {
 
     pub(crate) fn step(&mut self, host: &Host, input: VDom<()>) {
         match input.vdom {
-            VDomNode::Text { text: tnew, .. } => match &mut self.vdom {
-                VDomNode::Text {
+            VDomNode::Text(Text { text: tnew, .. }) => match &mut self.vdom {
+                VDomNode::Text(Text {
                     text: told,
                     state: node,
-                } => {
+                }) => {
                     if tnew != *told {
                         node.set_text_content(&tnew);
                         *told = tnew;
                     }
                 }
-                VDomNode::Elem { .. } => {
+                VDomNode::Elem(Elem { .. }) => {
                     self.halt_and_build(
                         host,
                         VDom {
-                            vdom: VDomNode::Text {
+                            vdom: VDomNode::Text(Text {
                                 text: tnew,
                                 state: (),
-                            },
+                            }),
                         },
                     );
                 }
             },
-            VDomNode::Elem {
+            VDomNode::Elem(Elem {
                 name: name_new,
                 attrs: attrs_new,
                 children: children_new,
                 ..
-            } => match &mut self.vdom {
-                VDomNode::Elem {
+            }) => match &mut self.vdom {
+                VDomNode::Elem(Elem {
                     name: name_old,
                     attrs: attrs_old,
                     children: children_old,
                     state: node,
-                } => {
+                }) => {
                     if name_new == *name_old {
                         // TODO: Update attrs
                         update_attrs(node, &attrs_old, &attrs_new);
@@ -180,26 +184,26 @@ impl VDom<Node> {
                         self.halt_and_build(
                             host,
                             VDom {
-                                vdom: VDomNode::Elem {
+                                vdom: VDomNode::Elem(Elem {
                                     name: name_new,
                                     attrs: attrs_new,
                                     children: children_new,
                                     state: (),
-                                },
+                                }),
                             },
                         );
                     }
                 }
-                VDomNode::Text { .. } => {
+                VDomNode::Text(Text { .. }) => {
                     self.halt_and_build(
                         host,
                         VDom {
-                            vdom: VDomNode::Elem {
+                            vdom: VDomNode::Elem(Elem {
                                 name: name_new,
                                 attrs: attrs_new,
                                 children: children_new,
                                 state: (),
-                            },
+                            }),
                         },
                     );
                 }

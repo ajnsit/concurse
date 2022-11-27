@@ -5,7 +5,7 @@ use wasm_bindgen::{prelude::Closure, JsValue};
 use crate::{
     host::{Host, Listener, Node},
     log,
-    vdom::{build, Attr, VDom, VDomNode},
+    vdom::{build, Attr, Elem, Text, VDom, VDomNode},
 };
 
 pub(crate) fn test(name: &str) -> Result<(), JsValue> {
@@ -16,10 +16,10 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
         vdom: build(
             &host,
             VDom {
-                vdom: VDomNode::Text {
+                vdom: VDomNode::Text(Text {
                     text: format!("Initialising {}...", name),
                     state: (),
-                },
+                }),
             },
         ),
     };
@@ -42,11 +42,11 @@ fn counter(href: &'static Host, mref: &'static mut VDom<Node>, count: i32) -> VD
     let m1 = mref as *mut VDom<Node>;
     let mref1: &'static mut VDom<Node> = unsafe { &mut *m1 };
     VDom {
-        vdom: VDomNode::Elem {
+        vdom: VDomNode::Elem(Elem {
             name: "div".to_owned(),
             attrs: HashMap::default(),
             children: Vec::from([(VDom {
-                vdom: VDomNode::Elem {
+                vdom: VDomNode::Elem(Elem {
                     name: "button".to_owned(),
                     attrs: HashMap::from([(
                         "click".to_owned(),
@@ -59,16 +59,16 @@ fn counter(href: &'static Host, mref: &'static mut VDom<Node>, count: i32) -> VD
                         }),
                     )]),
                     children: Vec::from([(VDom {
-                        vdom: VDomNode::Text {
+                        vdom: VDomNode::Text(Text {
                             text: format!("Count: {}", count),
                             state: (),
-                        },
+                        }),
                     })]),
                     state: (),
-                },
+                }),
             })]),
             state: (),
-        },
+        }),
     }
 }
 
