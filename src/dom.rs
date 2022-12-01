@@ -1,11 +1,15 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    ops::DerefMut,
+    sync::{Arc, Mutex},
+};
 
 use wasm_bindgen::{prelude::Closure, JsValue};
 
 use crate::{
     host::{Host, Listener, Node},
     log,
-    vdom::{build, Attr, Elem, Text, VDom, VDomNode},
+    vdom::{build, install, step, Attr, Elem, Text, VDom, VDomNode},
 };
 
 pub(crate) fn test(name: &str) -> Result<(), JsValue> {
@@ -23,24 +27,32 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
             },
         ),
     };
-    machine.install(&host);
+    install(&machine, &host);
 
     // Get 'static references by putting stuff in the heap
-    // If the references are not static then the unsafe stuff below to replicate refs will cause runtime errors
-    let mref = Box::<VDom<Node>>::leak(Box::new(machine));
     let href = Box::<Host>::leak(Box::new(host));
-    let m1 = mref as *mut VDom<Node>;
-    let mref1: &'static mut VDom<Node> = unsafe { &mut *m1 };
 
-    let vdom = counter(href, mref1, 0);
-    mref.step(href, vdom);
+    // Arc so we can share machines
+    let marc1 = Arc::from(Mutex::from(machine));
+    let marc2 = marc1.clone();
+
+    let vdom = counter(href, marc1, 0);
+
+    take_mut::take(
+        marc2
+            .as_ref()
+            .lock()
+            .expect("Failed to lock machine for stepping")
+            .deref_mut(),
+        |m| step(m, href, vdom),
+    );
 
     Ok(())
 }
 
-fn counter(href: &'static Host, mref: &'static mut VDom<Node>, count: i32) -> VDom<()> {
-    let m1 = mref as *mut VDom<Node>;
-    let mref1: &'static mut VDom<Node> = unsafe { &mut *m1 };
+fn counter(href: &'static Host, marc1: Arc<Mutex<VDom<Node>>>, count: i32) -> VDom<()> {
+    let marc2 = marc1.clone();
+    let marc3 = marc1.clone();
     VDom {
         vdom: VDomNode::Elem(Elem {
             name: "div".to_owned(),
@@ -51,11 +63,17 @@ fn counter(href: &'static Host, mref: &'static mut VDom<Node>, count: i32) -> VD
                     attrs: HashMap::from([(
                         "click".to_owned(),
                         Attr::EventHandler(Listener {
-                            handler: Closure::once(annotate(move || {
-                                let vdom = counter(href, mref, count + 1);
-                                mref1.step(href, vdom);
+                            handler: Closure::once(move || {
+                                take_mut::take(
+                                    marc2
+                                        .as_ref()
+                                        .lock()
+                                        .expect("Failed to lock machine within a handler")
+                                        .deref_mut(),
+                                    |m| step(m, href, counter(href, marc3, count + 1)),
+                                );
                                 log!("CLICKED!");
-                            })),
+                            }),
                         }),
                     )]),
                     children: Vec::from([(VDom {
