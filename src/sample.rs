@@ -53,29 +53,27 @@ pub(crate) fn test(name: &str) -> Result<(), JsValue> {
 fn counter(href: &'static Host, marc1: Arc<Mutex<VDom<Node>>>, count: i32) -> VDom<()> {
     let marc2 = marc1.clone();
     let marc3 = marc1.clone();
+    let listener = Listener {
+        handler: Closure::once(move || {
+            take_mut::take(
+                marc2
+                    .as_ref()
+                    .lock()
+                    .expect("Failed to lock machine within a handler")
+                    .deref_mut(),
+                |m| step(m, href, counter(href, marc3, count + 1)),
+            );
+            log!("CLICKED!");
+        }),
+    };
     VDom {
         vdom: VDomNode::Elem(Elem {
             name: "div".to_owned(),
             attrs: HashMap::default(),
-            children: Vec::from([(VDom {
+            children: Vec::from([VDom {
                 vdom: VDomNode::Elem(Elem {
                     name: "button".to_owned(),
-                    attrs: HashMap::from([(
-                        "click".to_owned(),
-                        Attr::EventHandler(Listener {
-                            handler: Closure::once(move || {
-                                take_mut::take(
-                                    marc2
-                                        .as_ref()
-                                        .lock()
-                                        .expect("Failed to lock machine within a handler")
-                                        .deref_mut(),
-                                    |m| step(m, href, counter(href, marc3, count + 1)),
-                                );
-                                log!("CLICKED!");
-                            }),
-                        }),
-                    )]),
+                    attrs: HashMap::from([("click".to_owned(), Attr::EventHandler(listener))]),
                     children: Vec::from([(VDom {
                         vdom: VDomNode::Text(Text {
                             text: format!("Count: {}", count),
@@ -84,7 +82,7 @@ fn counter(href: &'static Host, marc1: Arc<Mutex<VDom<Node>>>, count: i32) -> VD
                     })]),
                     state: (),
                 }),
-            })]),
+            }]),
             state: (),
         }),
     }
