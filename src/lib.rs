@@ -1,6 +1,9 @@
+#![feature(generators, generator_trait, future_join)]
+
 pub mod host;
 pub mod log;
 pub mod sample;
+pub mod sync;
 pub mod vdom;
 
 use sample::test;
