@@ -1,5 +1,6 @@
 pub mod host;
 pub mod log;
+pub mod machine;
 pub mod sample;
 pub mod vdom;
 

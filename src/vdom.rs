@@ -3,6 +3,7 @@ use itertools::Itertools;
 use std::collections::HashMap;
 
 use crate::host::{Host, Listener, Node};
+use crate::machine::Machine;
 
 pub(crate) enum Attr<L> {
     StringAttr(String),
@@ -33,55 +34,78 @@ pub(crate) struct VDom<State> {
     pub(crate) vdom: VDomNode<Vec<VDom<State>>, State, Attrs>,
 }
 
-pub(crate) fn build(host: &Host, input: VDom<()>) -> VDomNode<Vec<VDom<Node>>, Node, Attrs> {
-    match input.vdom {
-        VDomNode::Text(Text { text, .. }) => VDomNode::Text(Text {
-            text: text.clone(),
-            state: host.create_text_node(&text),
-        }),
-        VDomNode::Elem(Elem {
-            name,
-            attrs,
-            children: children1,
-            ..
-        }) => {
-            // Attach attributes
-            let node = host.create_element(&name);
-            let attrs_new = attrs
-                .into_iter()
-                .map(|(key, val)| match val {
-                    Attr::StringAttr(v) => {
-                        node.set_attribute(&key, &v);
-                        (key, Attr::StringAttr(v))
-                    }
-                    Attr::EventHandler(handler) => {
-                        // let listener = Listener {
-                        //     handler: Box::new(|| handler(runner)),
-                        // };
-                        node.add_event_listener(&key, &handler);
-                        (key, Attr::EventHandler(handler))
-                    }
-                })
-                .collect();
-            // Attach children
-            let children = children1
-                .into_iter()
-                .map(|vdom| {
-                    let child = VDom {
-                        vdom: build(host, vdom),
-                    };
-                    node.append_child(child.vdom.node());
-                    child
-                })
-                .collect();
-            // Return the machine
+pub(crate) struct VDomMachine<'a> {
+    pub(crate) vdom: VDom<Node>,
+    pub(crate) host: &'a Host,
+}
+
+impl<'a> Machine for VDomMachine<'a> {
+    type I = VDom<()>;
+
+    type O = VDom<Node>;
+
+    fn build(&mut self, i: Self::I) {
+        self.vdom = build(self.host, i);
+    }
+
+    fn step(&mut self, i: Self::I) {
+        take_mut::take(&mut self.vdom, |vdom| step(vdom, self.host, i));
+    }
+
+    fn halt(self) {
+        halt(self.vdom);
+    }
+}
+
+pub(crate) fn build(host: &Host, input: VDom<()>) -> VDom<Node> {
+    VDom {
+        vdom: match input.vdom {
+            VDomNode::Text(Text { text, .. }) => VDomNode::Text(Text {
+                text: text.clone(),
+                state: host.create_text_node(&text),
+            }),
             VDomNode::Elem(Elem {
                 name,
-                attrs: attrs_new,
-                children,
-                state: node,
-            })
-        }
+                attrs,
+                children: children1,
+                ..
+            }) => {
+                // Attach attributes
+                let node = host.create_element(&name);
+                let attrs_new = attrs
+                    .into_iter()
+                    .map(|(key, val)| match val {
+                        Attr::StringAttr(v) => {
+                            node.set_attribute(&key, &v);
+                            (key, Attr::StringAttr(v))
+                        }
+                        Attr::EventHandler(handler) => {
+                            // let listener = Listener {
+                            //     handler: Box::new(|| handler(runner)),
+                            // };
+                            node.add_event_listener(&key, &handler);
+                            (key, Attr::EventHandler(handler))
+                        }
+                    })
+                    .collect();
+                // Attach children
+                let children = children1
+                    .into_iter()
+                    .map(|vdom| {
+                        let child = build(host, vdom);
+                        node.append_child(child.vdom.node());
+                        child
+                    })
+                    .collect();
+                // Return the machine
+                VDomNode::Elem(Elem {
+                    name,
+                    attrs: attrs_new,
+                    children,
+                    state: node,
+                })
+            }
+        },
     }
 }
 
@@ -94,8 +118,10 @@ impl VDomNode<Vec<VDom<Node>>, Node, Attrs> {
     }
 }
 
-pub(crate) fn install(m: &VDom<Node>, host: &Host) {
-    host.install(m.vdom.node());
+impl<'a> VDomMachine<'a> {
+    pub(crate) fn install(&self) {
+        self.host.install(self.vdom.vdom.node());
+    }
 }
 
 pub(crate) fn halt(m: VDom<Node>) -> Option<Node> {
@@ -134,9 +160,9 @@ pub(crate) fn halt_and_build(m: VDom<Node>, host: &Host, input: VDom<()>) -> VDo
     let vdom = build(host, input);
     parent.map(|p| {
         // TODO: Insert in the same place as prev node
-        p.append_child(vdom.node());
+        p.append_child(vdom.vdom.node());
     });
-    VDom { vdom }
+    vdom
 }
 
 pub(crate) fn step(v: VDom<Node>, host: &Host, input: VDom<()>) -> VDom<Node> {
@@ -277,8 +303,8 @@ fn update_children(
             Right(vdom) => {
                 let child = build(host, vdom);
                 // TODO: Insert at the correct index
-                parent.append_child(child.node());
-                Some(VDom { vdom: child })
+                parent.append_child(child.vdom.node());
+                Some(child)
             }
         })
         .collect()
